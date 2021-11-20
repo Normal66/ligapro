@@ -2,20 +2,47 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-from datetime import *
 from dateutil.relativedelta import *
-import calendar
 from dateutil.rrule import *
-from dateutil.parser import *
 from datetime import *
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 import json
 
 TEST_TOUR_URL = 'https://tt.sport-liga.pro/tours/13241'
-PERIOD = 1        # За сколько месяцев брать матчи
+PERIOD = 2        # За сколько месяцев брать матчи
 TOURS_URL = 'https://tt.sport-liga.pro/tours/'
 get_href = re.compile(r'href=\"([^\"]*)\"')
+
+
+def get_date(inp_date: str) -> date:
+    _month = None
+    _day, _tmp_month, _year = inp_date.split(' ')
+    if 'Янв' in _tmp_month:
+        _month = 1
+    if 'Фев' in _tmp_month:
+        _month = 2
+    if 'Мар' in _tmp_month:
+        _month = 3
+    if 'Апр' in _tmp_month:
+        _month = 4
+    if 'Май' in _tmp_month:
+        _month = 5
+    if 'юн' in _tmp_month:
+        _month = 6
+    if 'юл' in _tmp_month:
+        _month = 7
+    if 'Авг' in _tmp_month:
+        _month = 8
+    if 'Сен' in _tmp_month:
+        _month = 9
+    if 'Окт' in _tmp_month:
+        _month = 10
+    if 'Ноя' in _tmp_month:
+        _month = 11
+    if 'Дек' in _tmp_month:
+        _month = 12
+    return datetime(int(_year.strip()), _month, int(_day.strip()))
 
 
 def get_list_url_tours(inp_url: str) -> list:
@@ -80,7 +107,7 @@ def get_list_match_by_tour(inp_url: str):
             if _a and _b and _c and _d:
                 _tmp_res = {}
                 # Дата игры
-                _tmp_res['date'] = _date
+                _tmp_res['date'] = get_date(_date)
                 # Время игры
                 # Игрок 1
                 _tmp = re.findall(r'([-а-яА-Я]+)', str(_a))
@@ -98,8 +125,8 @@ def get_list_match_by_tour(inp_url: str):
                 # Счёт
                 _tmp = re.findall(r'\d : \d', str(_c))[0]
                 _score1, _score2 = _tmp.split(':')
-                _tmp_res['score1'] = _score1
-                _tmp_res['score2'] = _score2
+                _tmp_res['score1'] = int(_score1.strip())
+                _tmp_res['score2'] = int(_score2.strip())
                 # Сеты
                 _tmp_res['sets'] = re.findall(r'(\d+-\d+)+', str(_c))
                 _result.append(_tmp_res)
@@ -125,7 +152,7 @@ def make_full(list_url):
         for _items in _item:
             data.append(_items)
     with open('allgame.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(data, f, ensure_ascii=False, indent=4, sort_keys=True, default=str)
     return data
 
 
