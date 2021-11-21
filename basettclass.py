@@ -23,14 +23,23 @@ def get_curr_rating(player: str) -> int:
                 id_player = get_href.findall(str(_items))[0]
                 # Запрашиваем страницу пользователя
                 url_player = f"https://tt.sport-liga.pro/{id_player}"
+                print(url_player)
                 gcr_r = requests.get(url_player)
                 src = BeautifulSoup(gcr_r.text, 'html.parser')
                 _table = src.find('table', {'class': 'user-rating-table'})
-                _rating = int(_table.find('h2').text)
+                try:
+                    _rating = int(_table.find('h2').text)
+                except AttributeError:
+                    _rating = 0
     return _rating
 
 
 class TableTennis(object):
+    # TODO Добавить результаты последних N игр соперников с другими игроками. Например: P1, P2
+    # n игр P1 vs Pm, P2 vs Pm в формате
+    #       Pm  Pm  Pm
+    # P1    1:3 0:3 2:3
+    # P2    3:2 3:2 1:3
     def __init__(self):
         super(TableTennis, self).__init__()
         with open('allgame.json', 'r', encoding='utf-8') as fp:
@@ -69,6 +78,10 @@ class TableTennis(object):
         self._src.drop('sets', axis=1, inplace=True)
 
     def update(self) -> None:
+        """
+        1) Удаляем игры за сегодня
+        2) Добавляем игры за период = [Дата последней игры - Сегодня]
+        """
         pass
 
     def game_30(self):
@@ -81,36 +94,9 @@ class TableTennis(object):
                             ((self._src['player1'] == pl2) & (self._src['player2'] == pl1))]
         if len(_df) == 0:
             return None
-        _df.loc[:, "Set1"] = int(0)
-        _df.loc[:, "Set2"] = int(0)
-        _df.loc[:, "Set3"] = int(0)
-        _df.loc[:, "Set4"] = int(0)
-        _df.loc[:, "Set5"] = int(0)
-        _df.loc[:, "Total"] = int(0)
-        # Рассчитываем тоталы по сетам и тотал по матчу
-        for _ind, item in _df.iterrows():
-            _tmp_set = item['sets']
-            # Обрабатываем набор и считаем тотал
-            _total = 0
-            _i = 1
-            for _items in _tmp_set:
-                _set_total = 0
-                _a, _b = _items.split('-')
-                _set_total = int(_a) + int(_b)
-                _total += int(_a) + int(_b)
-                if _i == 1:
-                    _df.loc[_ind, 'Set1'] = _set_total
-                if _i == 2:
-                    _df.loc[_ind, 'Set2'] = _set_total
-                if _i == 3:
-                    _df.loc[_ind, 'Set3'] = _set_total
-                if _i == 4:
-                    _df.loc[_ind, 'Set4'] = _set_total
-                if _i == 5:
-                    _df.loc[_ind, 'Set5'] = _set_total
-                _i += 1
-            _df.loc[_ind, 'Total'] = _total
-        _df.drop('sets', axis=1, inplace=True)
-#        print(_df.to_string(index=False))
         print(_df)
-        return _df
+        # Вот тут нам бы еще и текущие рейтинги не помешали бы...
+        r1 = get_curr_rating(pl1)
+        r2 = get_curr_rating(pl2)
+        print(r1, r2)
+        return _df, [r1, r2]
