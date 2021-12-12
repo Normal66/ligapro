@@ -8,9 +8,11 @@ from datetime import *
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 import json
+import os
+import pandas as pd
 
 TEST_TOUR_URL = 'https://tt.sport-liga.pro/tours/13241'
-PERIOD = 2        # За сколько месяцев брать матчи
+PERIOD = 1        # За сколько месяцев брать матчи
 TOURS_URL = 'https://tt.sport-liga.pro/tours/'
 get_href = re.compile(r'href=\"([^\"]*)\"')
 
@@ -49,6 +51,9 @@ def get_list_url_tours(inp_url: str) -> list:
     # Формируем список url прошедших турниров
     _result = []
     r = requests.get(inp_url)
+    if r.status_code != 200:
+        print('Error in get_list_url_tours')
+        return []
     src = BeautifulSoup(r.text, 'html.parser')
     tmp_url = src.findAll('td', {'class': 'tournament-name'})
     list_url = get_href.findall(str(tmp_url))
@@ -57,11 +62,14 @@ def get_list_url_tours(inp_url: str) -> list:
     return _result
 
 
-def make_list_url_by_day() -> list:
+def make_list_url_by_day(is_update=False, inp_days=0) -> list:
     # Формируем список url по дням за период с TODAY-PERIOD по TODAY ввиде:
     # https://tt.sport-liga.pro/tours/?year=2021&month=11&day=4
     _result = []
-    _tmp = list(list(rrule(DAILY, dtstart=date.today()+relativedelta(months=-PERIOD), until=date.today())))
+    if not is_update:
+        _tmp = list(list(rrule(DAILY, dtstart=date.today()+relativedelta(months=-PERIOD), until=date.today())))
+    else:
+        _tmp = list(list(rrule(DAILY, dtstart=date.today() + relativedelta(days=-inp_days), until=date.today())))
     for _items in _tmp:
         _result.append(f'{TOURS_URL}?year={_items.year}&month={_items.month}&day={_items.day}')
     return _result
@@ -92,6 +100,8 @@ def get_list_match_by_tour(inp_url: str):
     # Возвращает словарь статистики игр в турнире
     _result = []
     r = requests.get(inp_url)
+    if r.status_code != 200:
+        print('Error in get_list_match_by_tour')
     src = BeautifulSoup(r.text, 'html.parser')
     _date = src.title.text.split('-')[0].strip()
     _table = src.find('table', {'class': 'games_list'})
@@ -131,11 +141,12 @@ def get_list_match_by_tour(inp_url: str):
                 _tmp_res['sets'] = re.findall(r'(\d+-\d+)+', str(_c))
                 _result.append(_tmp_res)
         except:
+            #   print('Error in get_list_match_by_tour')
             pass
     return _result
 
 
-def make_full(list_url):
+def make_full(list_url, out_file='allgame.json'):
     _res = []
     _i = 0
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -151,13 +162,28 @@ def make_full(list_url):
     for _item in _res:
         for _items in _item:
             data.append(_items)
-    with open('allgame.json', 'w', encoding='utf-8') as f:
+    with open(out_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4, sort_keys=True, default=str)
     return data
 
 
 def prepare_game():
-    _ = make_full(initial_data_filling(make_list_url_by_day()))
+    # Если еще нет allgame.json, значит первый запуск, иначе - это обновление...
+    if os.path.exists('allgame.json'):
+        # Обновление...
+        with open('allgame.json', 'r', encoding='utf-8') as fp:
+            _l_data = json.load(fp)
+        _src = pd.json_normalize(_l_data)
+        _src = _src.sort_values(by='date')
+        _t = _src.tail(1)
+        LastDate = _t['date'].iloc[0]
+        d = datetime.strptime(LastDate, '%Y-%m-%d %H:%M:%S')
+        # Convert datetime object to date object.
+        d = d.date()
+        Delta = datetime.today().date() - d
+        _ = make_full(initial_data_filling(make_list_url_by_day(True, Delta.days)), 'update.json')
+    else:
+        _ = make_full(initial_data_filling(make_list_url_by_day()))
 
 
 if __name__ == '__main__':
